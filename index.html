@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>HLS Player - Kapamilya Stream (CORS Fixed)</title>
-    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+    <title>HLS Player - Kapamilya Stream</title>
     <style>
         * {
             margin: 0;
@@ -12,7 +11,7 @@
             box-sizing: border-box;
         }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
             background: linear-gradient(135deg, #0a0f1e 0%, #0a1a2f 100%);
             min-height: 100vh;
             display: flex;
@@ -23,113 +22,97 @@
         .player-container {
             max-width: 1280px;
             width: 100%;
-            background: rgba(0,0,0,0.6);
+            background: rgba(0,0,0,0.5);
             border-radius: 24px;
             padding: 20px;
-            box-shadow: 0 25px 45px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05);
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 25px 45px rgba(0,0,0,0.3);
         }
         .video-wrapper {
             border-radius: 20px;
             overflow: hidden;
             background: #000;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            position: relative;
         }
-        .video-js {
+        video {
             width: 100%;
             aspect-ratio: 16 / 9;
-            background-color: #000;
+            display: block;
+            background: #000;
         }
-        .video-js .vjs-big-play-button {
-            background-color: rgba(220, 20, 60, 0.8);
-            border-radius: 50%;
-            width: 3em;
-            height: 3em;
-            line-height: 3em;
-            margin-top: -1.5em;
-            margin-left: -1.5em;
-            border: none;
-        }
-        .video-js .vjs-big-play-button:hover {
-            background-color: #crimson;
-        }
-        .controls-info {
-            margin-top: 20px;
+        .controls-bar {
+            margin-top: 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 15px;
-            color: #e0e0e0;
-            font-size: 14px;
-            background: rgba(0,0,0,0.5);
+            gap: 12px;
+            background: rgba(0,0,0,0.6);
             padding: 12px 20px;
             border-radius: 60px;
             backdrop-filter: blur(8px);
         }
-        .status {
+        .status-indicator {
             display: flex;
             align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 14px;
+            color: #e0e0e0;
         }
         .led {
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
-            background-color: #ff4d4d;
-            box-shadow: 0 0 6px #ff4d4d;
+            background: #ff4444;
+            box-shadow: 0 0 6px #ff4444;
             transition: all 0.2s;
         }
-        .led.active {
-            background-color: #2ecc71;
+        .led.playing {
+            background: #2ecc71;
             box-shadow: 0 0 8px #2ecc71;
         }
+        .led.buffering {
+            background: #f39c12;
+            box-shadow: 0 0 8px #f39c12;
+        }
         button {
-            background: rgba(30,30,40,0.9);
+            background: rgba(220, 20, 60, 0.9);
             border: none;
             color: white;
-            padding: 6px 16px;
+            padding: 6px 20px;
             border-radius: 40px;
             cursor: pointer;
             font-weight: 500;
+            font-size: 14px;
             transition: 0.2s;
-            backdrop-filter: blur(4px);
         }
         button:hover {
             background: #dc143c;
             transform: scale(1.02);
         }
-        .quality-badge {
+        .quality-select {
             background: #1e2a3a;
-            padding: 4px 12px;
+            border: none;
+            color: white;
+            padding: 6px 12px;
             border-radius: 40px;
-            font-family: monospace;
             font-size: 12px;
+            cursor: pointer;
         }
-        .footer-note {
+        .info-text {
             text-align: center;
-            margin-top: 16px;
-            font-size: 12px;
-            color: #aaa;
-        }
-        .proxy-warning {
-            background: rgba(255, 100, 0, 0.2);
-            border-left: 3px solid #ff6600;
-            padding: 8px 12px;
-            border-radius: 8px;
             margin-top: 12px;
             font-size: 11px;
-            text-align: center;
+            color: #aaa;
         }
         @media (max-width: 640px) {
-            .controls-info {
+            .controls-bar {
                 border-radius: 28px;
                 flex-direction: column;
                 align-items: stretch;
-                text-align: center;
             }
-            .status {
+            .status-indicator {
                 justify-content: center;
             }
         }
@@ -138,230 +121,205 @@
 <body>
 <div class="player-container">
     <div class="video-wrapper">
-        <video
-            id="hlsPlayer"
-            class="video-js vjs-default-skin vjs-big-play-centered"
-            controls
-            preload="auto"
-            data-setup='{}'
-            poster="https://via.placeholder.com/1280x720/0a1a2f/ffffff?text=Kapamilya+Stream"
-        >
-            <p class="vjs-no-js">
-                To view this video please enable JavaScript, and consider upgrading to a
-                web browser that supports HTML5 video.
-            </p>
-        </video>
+        <video id="video" controls playsinline></video>
     </div>
-    <div class="controls-info">
-        <div class="status">
-            <span class="led" id="streamLed"></span>
-            <span id="streamStatusText">Naghihintay ng stream...</span>
+    <div class="controls-bar">
+        <div class="status-indicator">
+            <span class="led" id="led"></span>
+            <span id="statusText">Ready</span>
         </div>
-        <div class="quality-badge" id="qualityInfo">HLS • Adaptive</div>
-        <button id="reloadBtn">🔄 I-reload ang stream</button>
+        <select id="qualitySelect" class="quality-select" style="display: none;">
+            <option value="auto">Auto Quality</option>
+        </select>
+        <button id="reloadBtn">🔄 Reload Stream</button>
     </div>
-    <div class="proxy-warning" id="proxyNote">
-        ⚡ Gumagamit ng CORS proxy para sa stream. Kung hindi gumana, subukan ang alternative proxy sa ibaba.
-    </div>
-    <div class="footer-note">
-        📡 M3U8 HLS Player | Kapamilya Channel
+    <div class="info-text">
+        🎬 HLS.js Player | Kapamilya Channel • Same engine used by m3u8-player.net
     </div>
 </div>
 
-<!-- Video.js core + HLS support -->
-<script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/videojs-contrib-hls@5.15.0/dist/videojs-contrib-hls.min.js"></script>
+<!-- hls.js - the same library used by m3u8-player.net -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
 <script>
-    // Original M3U8 URL with token
-    const ORIGINAL_URL = "https://converse.nathcreqtives.com/cignal/kapamilya/playlist.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJtb29uIiwiaWF0IjoxNzczODk2NjUxLCJleHAiOjE3NzQ3OTIzNTUsImFjY291bnRFeHBpcmVkIjpmYWxzZSwiYWNjb3VudEV4cGlyZXNBdCI6MTc3NDc5MjM1NSwiYWxsb3dlZE9yaWdpbnMiOlsiaHR0cHM6Ly8zcnNuZXcucGFnZXMuZGV2IiwiaHR0cHM6Ly8zcnNyYWRpbzIucGFnZXMuZGV2Il19.vP0CY269yvtEkjOU5rVmfiTUSIqB9xEMZhfyhORNLj8";
+    // Your M3U8 URL
+    const M3U8_URL = "https://converse.nathcreqtives.com/cignal/kapamilya/playlist.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJtb29uIiwiaWF0IjoxNzczODk2NjUxLCJleHAiOjE3NzQ3OTIzNTUsImFjY291bnRFeHBpcmVkIjpmYWxzZSwiYWNjb3VudEV4cGlyZXNBdCI6MTc3NDc5MjM1NSwiYWxsb3dlZE9yaWdpbnMiOlsiaHR0cHM6Ly8zcnNuZXcucGFnZXMuZGV2IiwiaHR0cHM6Ly8zcnNyYWRpbzIucGFnZXMuZGV2Il19.vP0CY269yvtEkjOU5rVmfiTUSIqB9xEMZhfyhORNLj8";
     
-    // CORS Proxies (try multiple if one fails)
-    const CORS_PROXIES = [
-        'https://cors-anywhere.herokuapp.com/',
-        'https://api.allorigins.win/raw?url=',
-        'https://proxy.cors.sh/',
-        'https://cors-proxy.htmldriven.com/?url='
-    ];
+    const video = document.getElementById('video');
+    const led = document.getElementById('led');
+    const statusText = document.getElementById('statusText');
+    const qualitySelect = document.getElementById('qualitySelect');
+    const reloadBtn = document.getElementById('reloadBtn');
     
-    let currentProxyIndex = 0;
-    let player;
-    let retryAttempt = 0;
-    const MAX_RETRIES = 3;
-    let currentProxyUrl = null;
+    let hls = null;
+    let currentLevels = [];
     
-    // Function to get URL with proxy
-    function getProxiedUrl(originalUrl, proxyUrl) {
-        // For allorigins, we need special handling because it returns JSON
-        if (proxyUrl.includes('allorigins')) {
-            return proxyUrl + encodeURIComponent(originalUrl);
+    function updateStatus(state, message) {
+        led.className = 'led';
+        if (state === 'playing') {
+            led.classList.add('playing');
+        } else if (state === 'buffering') {
+            led.classList.add('buffering');
         }
-        // For cors.sh and others
-        return proxyUrl + encodeURIComponent(originalUrl);
+        statusText.textContent = message;
     }
     
-    // Update status display
-    function updateStatus(isPlaying, errorMsg = null) {
-        const led = document.getElementById('streamLed');
-        const statusText = document.getElementById('streamStatusText');
-        if (errorMsg) {
-            led.className = 'led';
-            statusText.innerHTML = `⚠️ ${errorMsg}`;
+    function initPlayer() {
+        // Clear previous HLS instance if exists
+        if (hls) {
+            hls.destroy();
+            hls = null;
+        }
+        
+        // Check if browser supports native HLS (Safari)
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            updateStatus('buffering', 'Loading stream (native HLS)...');
+            video.src = M3U8_URL;
+            video.addEventListener('loadedmetadata', () => {
+                updateStatus('playing', 'Playing • Native HLS');
+            });
+            video.addEventListener('playing', () => updateStatus('playing', 'Playing • Native HLS'));
+            video.addEventListener('waiting', () => updateStatus('buffering', 'Buffering...'));
+            video.addEventListener('error', () => {
+                updateStatus('buffering', 'Native HLS failed, trying hls.js...');
+                loadWithHlsJs();
+            });
+            video.play().catch(e => {
+                console.warn('Autoplay blocked:', e);
+                updateStatus('buffering', 'Click play to start');
+            });
+        } else {
+            // Use hls.js for all other browsers
+            loadWithHlsJs();
+        }
+    }
+    
+    function loadWithHlsJs() {
+        if (!Hls.isSupported()) {
+            updateStatus('buffering', 'HLS not supported in this browser');
+            statusText.textContent = '❌ HLS not supported';
             return;
         }
-        if (isPlaying) {
-            led.className = 'led active';
-            statusText.innerHTML = '📺 Nagpe-play na ang stream (Live / HLS)';
-        } else {
-            led.className = 'led';
-            statusText.innerHTML = '⏸ Naka-pause o naglo-load...';
-        }
-    }
-    
-    // Try next proxy if current fails
-    function tryNextProxy() {
-        if (currentProxyIndex < CORS_PROXIES.length - 1) {
-            currentProxyIndex++;
-            const proxyNote = document.getElementById('proxyNote');
-            proxyNote.innerHTML = `🔄 Sinusubukan ang alternative proxy (${currentProxyIndex + 1}/${CORS_PROXIES.length})...`;
-            loadStream();
-        } else {
-            updateStatus(false, 'Lahat ng proxy ay nabigo. Maaaring expired ang token o offline ang stream.');
-            document.getElementById('proxyNote').innerHTML = '❌ Hindi makakonekta sa stream. Pindutin ang reload para subukan muli.';
-        }
-    }
-    
-    // Load stream with current proxy
-    function loadStream() {
-        if (!player) return;
         
-        const proxyUrl = CORS_PROXIES[currentProxyIndex];
-        const proxiedUrl = getProxiedUrl(ORIGINAL_URL, proxyUrl);
-        currentProxyUrl = proxiedUrl;
+        updateStatus('buffering', 'Loading stream with hls.js...');
         
-        console.log(`Using proxy ${currentProxyIndex + 1}: ${proxyUrl}`);
-        updateStatus(false, `Kumokonekta sa stream (proxy ${currentProxyIndex + 1}/${CORS_PROXIES.length})...`);
-        document.getElementById('qualityInfo').innerHTML = '⏳ Naglo-load...';
+        hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: true,
+            backBufferLength: 90,
+            maxBufferLength: 30,
+            maxMaxBufferLength: 60,
+            liveSyncDurationCount: 3,
+            liveMaxLatencyDurationCount: 6,
+            startLevel: -1, // auto quality
+            debug: false
+        });
         
-        // Set source with proxy URL
-        player.src({ type: 'application/x-mpegURL', src: proxiedUrl });
-        player.load();
+        // Load the M3U8 source
+        hls.loadSource(M3U8_URL);
+        hls.attachMedia(video);
         
-        // Autoplay attempt
-        player.play().catch(e => {
-            console.warn('Autoplay prevented:', e);
-            updateStatus(false, 'I-tap ang play para magsimula');
+        // Quality levels available
+        hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+            currentLevels = data.levels;
+            if (currentLevels.length > 1) {
+                qualitySelect.style.display = 'inline-block';
+                qualitySelect.innerHTML = '<option value="auto">Auto Quality</option>';
+                currentLevels.forEach((level, idx) => {
+                    const height = level.height || (level.width ? Math.round(level.width * 9 / 16) : 'unknown');
+                    const bitrate = (level.bitrate / 1000).toFixed(0);
+                    qualitySelect.innerHTML += `<option value="${idx}">${height}p (${bitrate} kbps)</option>`;
+                });
+            }
+            updateStatus('playing', `Playing • ${currentLevels.length} quality levels`);
+            video.play().catch(e => console.log('Autoplay prevented:', e));
+        });
+        
+        // Level switch event
+        hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+            const level = data.level;
+            if (level >= 0 && currentLevels[level]) {
+                const height = currentLevels[level].height || 'auto';
+                updateStatus('playing', `Playing • ${height}p`);
+            } else {
+                updateStatus('playing', 'Playing • Auto quality');
+            }
+        });
+        
+        // Loading events
+        hls.on(Hls.Events.BUFFER_APPENDING, () => {
+            if (video.paused === false) {
+                updateStatus('playing', 'Playing • Buffering');
+            }
+        });
+        
+        hls.on(Hls.Events.BUFFER_APPENDED, () => {
+            if (video.paused === false) {
+                updateStatus('playing', 'Playing');
+            }
+        });
+        
+        // Error handling with retry
+        hls.on(Hls.Events.ERROR, (event, data) => {
+            console.error('HLS Error:', data);
+            
+            if (data.fatal) {
+                switch (data.type) {
+                    case Hls.ErrorTypes.NETWORK_ERROR:
+                        updateStatus('buffering', 'Network error, retrying...');
+                        setTimeout(() => {
+                            hls.startLoad();
+                        }, 2000);
+                        break;
+                    case Hls.ErrorTypes.MEDIA_ERROR:
+                        updateStatus('buffering', 'Media error, recovering...');
+                        hls.recoverMediaError();
+                        break;
+                    default:
+                        updateStatus('buffering', 'Fatal error, reloading...');
+                        setTimeout(() => {
+                            initPlayer();
+                        }, 3000);
+                        break;
+                }
+            } else {
+                updateStatus('buffering', `Warning: ${data.details}`);
+            }
+        });
+        
+        video.addEventListener('playing', () => updateStatus('playing', 'Playing'));
+        video.addEventListener('pause', () => updateStatus('buffering', 'Paused'));
+        video.addEventListener('waiting', () => updateStatus('buffering', 'Buffering...'));
+        video.addEventListener('error', (e) => {
+            console.error('Video error:', e);
+            updateStatus('buffering', 'Video error, reloading...');
+            setTimeout(() => initPlayer(), 2000);
         });
     }
     
-    // Initialize HLS player
-    function initHLSPlayer() {
-        if (!player) {
-            player = videojs('hlsPlayer', {
-                controls: true,
-                autoplay: true,
-                preload: 'auto',
-                html5: {
-                    hls: {
-                        enableLowInitialPlaylist: true,
-                        smoothQualityChange: true,
-                        overrideNative: true,
-                        debug: false
-                    }
-                },
-                playbackRates: [0.5, 1, 1.5, 2],
-                controlBar: {
-                    children: [
-                        'playToggle',
-                        'volumePanel',
-                        'currentTimeDisplay',
-                        'timeDivider',
-                        'durationDisplay',
-                        'progressControl',
-                        'liveDisplay',
-                        'playbackRateMenuButton',
-                        'fullscreenToggle'
-                    ]
-                }
-            });
-            
-            player.ready(() => {
-                console.log('✅ Video.js player ready');
-                loadStream();
-            });
-            
-            // Event listeners
-            player.on('playing', () => {
-                updateStatus(true);
-                retryAttempt = 0;
-                document.getElementById('qualityInfo').innerHTML = '🎬 HLS • Streaming via proxy';
-                document.getElementById('proxyNote').style.background = 'rgba(46, 204, 113, 0.2)';
-                document.getElementById('proxyNote').style.borderLeftColor = '#2ecc71';
-            });
-            
-            player.on('pause', () => updateStatus(false));
-            player.on('waiting', () => updateStatus(false, 'Buffering...'));
-            
-            player.on('error', (event) => {
-                console.error('Player error:', event);
-                let errorMsg = 'Stream error.';
-                const mediaError = player.error();
-                if (mediaError) {
-                    errorMsg = `Error: ${mediaError.code}`;
-                    console.log('Media error details:', mediaError);
-                }
-                updateStatus(false, errorMsg);
-                
-                // Try next proxy if current failed
-                if (retryAttempt < MAX_RETRIES) {
-                    retryAttempt++;
-                    console.log(`Retrying with next proxy... attempt ${retryAttempt}`);
-                    setTimeout(() => {
-                        tryNextProxy();
-                    }, 2000);
-                } else {
-                    updateStatus(false, 'Hindi makakonekta. Subukan ang manual reload.');
-                }
-            });
-            
-            player.on('loadedmetadata', () => {
-                updateStatus(true);
-                try {
-                    if (player.hls && player.hls.levels && player.hls.levels.length) {
-                        document.getElementById('qualityInfo').innerHTML = `🎛️ HLS • ${player.hls.levels.length} variants`;
-                    }
-                } catch(e) { console.warn(e); }
-            });
-        } else {
-            loadStream();
+    // Quality selector
+    qualitySelect.addEventListener('change', (e) => {
+        if (hls) {
+            const level = parseInt(e.target.value);
+            if (isNaN(level)) {
+                hls.currentLevel = -1;
+                updateStatus('buffering', 'Switching to Auto quality...');
+            } else {
+                hls.currentLevel = level;
+                const height = currentLevels[level]?.height || 'selected';
+                updateStatus('buffering', `Switching to ${height}p...`);
+            }
         }
-    }
-    
-    // Manual reload function
-    function reloadStream() {
-        retryAttempt = 0;
-        currentProxyIndex = 0;
-        if (player) {
-            loadStream();
-        } else {
-            initHLSPlayer();
-        }
-    }
-    
-    // Alternative: Direct iframe method for testing (if CORS is too strict)
-    function showAlternativeMethod() {
-        console.log("If proxy fails, try opening the M3U8 in VLC or using a browser extension to disable CORS");
-    }
-    
-    // Add button listener
-    document.getElementById('reloadBtn').addEventListener('click', () => {
-        reloadStream();
     });
     
-    // Start everything
-    document.addEventListener('DOMContentLoaded', () => {
-        initHLSPlayer();
+    // Reload button
+    reloadBtn.addEventListener('click', () => {
+        updateStatus('buffering', 'Reloading stream...');
+        initPlayer();
     });
+    
+    // Start player
+    initPlayer();
 </script>
 </body>
 </html>
