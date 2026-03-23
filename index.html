@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>HLS Player - Kapamilya Stream</title>
+    <title>HLS Player - Kapamilya Stream (CORS Fixed)</title>
     <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
     <style>
         * {
@@ -113,6 +113,15 @@
             font-size: 12px;
             color: #aaa;
         }
+        .proxy-warning {
+            background: rgba(255, 100, 0, 0.2);
+            border-left: 3px solid #ff6600;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-top: 12px;
+            font-size: 11px;
+            text-align: center;
+        }
         @media (max-width: 640px) {
             .controls-info {
                 border-radius: 28px;
@@ -151,8 +160,11 @@
         <div class="quality-badge" id="qualityInfo">HLS • Adaptive</div>
         <button id="reloadBtn">🔄 I-reload ang stream</button>
     </div>
+    <div class="proxy-warning" id="proxyNote">
+        ⚡ Gumagamit ng CORS proxy para sa stream. Kung hindi gumana, subukan ang alternative proxy sa ibaba.
+    </div>
     <div class="footer-note">
-        📡 M3U8 HLS Player | Kapamilya Channel • Ipinapakita ang adaptive streaming
+        📡 M3U8 HLS Player | Kapamilya Channel
     </div>
 </div>
 
@@ -161,15 +173,34 @@
 <script src="https://cdn.jsdelivr.net/npm/videojs-contrib-hls@5.15.0/dist/videojs-contrib-hls.min.js"></script>
 
 <script>
-    // M3U8 URL na ibinigay (kasama ang token)
-    const M3U8_URL = "https://converse.nathcreqtives.com/cignal/kapamilya/playlist.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJtb29uIiwiaWF0IjoxNzczODk2NjUxLCJleHAiOjE3NzQ3OTIzNTUsImFjY291bnRFeHBpcmVkIjpmYWxzZSwiYWNjb3VudEV4cGlyZXNBdCI6MTc3NDc5MjM1NSwiYWxsb3dlZE9yaWdpbnMiOlsiaHR0cHM6Ly8zcnNuZXcucGFnZXMuZGV2IiwiaHR0cHM6Ly8zcnNyYWRpbzIucGFnZXMuZGV2Il19.vP0CY269yvtEkjOU5rVmfiTUSIqB9xEMZhfyhORNLj8";
+    // Original M3U8 URL with token
+    const ORIGINAL_URL = "https://converse.nathcreqtives.com/cignal/kapamilya/playlist.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJtb29uIiwiaWF0IjoxNzczODk2NjUxLCJleHAiOjE3NzQ3OTIzNTUsImFjY291bnRFeHBpcmVkIjpmYWxzZSwiYWNjb3VudEV4cGlyZXNBdCI6MTc3NDc5MjM1NSwiYWxsb3dlZE9yaWdpbnMiOlsiaHR0cHM6Ly8zcnNuZXcucGFnZXMuZGV2IiwiaHR0cHM6Ly8zcnNyYWRpbzIucGFnZXMuZGV2Il19.vP0CY269yvtEkjOU5rVmfiTUSIqB9xEMZhfyhORNLj8";
     
+    // CORS Proxies (try multiple if one fails)
+    const CORS_PROXIES = [
+        'https://cors-anywhere.herokuapp.com/',
+        'https://api.allorigins.win/raw?url=',
+        'https://proxy.cors.sh/',
+        'https://cors-proxy.htmldriven.com/?url='
+    ];
+    
+    let currentProxyIndex = 0;
     let player;
-    let currentQualityLevels = [];
     let retryAttempt = 0;
     const MAX_RETRIES = 3;
-
-    // Helper: update LED and status text
+    let currentProxyUrl = null;
+    
+    // Function to get URL with proxy
+    function getProxiedUrl(originalUrl, proxyUrl) {
+        // For allorigins, we need special handling because it returns JSON
+        if (proxyUrl.includes('allorigins')) {
+            return proxyUrl + encodeURIComponent(originalUrl);
+        }
+        // For cors.sh and others
+        return proxyUrl + encodeURIComponent(originalUrl);
+    }
+    
+    // Update status display
     function updateStatus(isPlaying, errorMsg = null) {
         const led = document.getElementById('streamLed');
         const statusText = document.getElementById('streamStatusText');
@@ -186,11 +217,46 @@
             statusText.innerHTML = '⏸ Naka-pause o naglo-load...';
         }
     }
-
-    // Function to initialize or reload HLS source
+    
+    // Try next proxy if current fails
+    function tryNextProxy() {
+        if (currentProxyIndex < CORS_PROXIES.length - 1) {
+            currentProxyIndex++;
+            const proxyNote = document.getElementById('proxyNote');
+            proxyNote.innerHTML = `🔄 Sinusubukan ang alternative proxy (${currentProxyIndex + 1}/${CORS_PROXIES.length})...`;
+            loadStream();
+        } else {
+            updateStatus(false, 'Lahat ng proxy ay nabigo. Maaaring expired ang token o offline ang stream.');
+            document.getElementById('proxyNote').innerHTML = '❌ Hindi makakonekta sa stream. Pindutin ang reload para subukan muli.';
+        }
+    }
+    
+    // Load stream with current proxy
+    function loadStream() {
+        if (!player) return;
+        
+        const proxyUrl = CORS_PROXIES[currentProxyIndex];
+        const proxiedUrl = getProxiedUrl(ORIGINAL_URL, proxyUrl);
+        currentProxyUrl = proxiedUrl;
+        
+        console.log(`Using proxy ${currentProxyIndex + 1}: ${proxyUrl}`);
+        updateStatus(false, `Kumokonekta sa stream (proxy ${currentProxyIndex + 1}/${CORS_PROXIES.length})...`);
+        document.getElementById('qualityInfo').innerHTML = '⏳ Naglo-load...';
+        
+        // Set source with proxy URL
+        player.src({ type: 'application/x-mpegURL', src: proxiedUrl });
+        player.load();
+        
+        // Autoplay attempt
+        player.play().catch(e => {
+            console.warn('Autoplay prevented:', e);
+            updateStatus(false, 'I-tap ang play para magsimula');
+        });
+    }
+    
+    // Initialize HLS player
     function initHLSPlayer() {
         if (!player) {
-            // Create player instance
             player = videojs('hlsPlayer', {
                 controls: true,
                 autoplay: true,
@@ -199,7 +265,7 @@
                     hls: {
                         enableLowInitialPlaylist: true,
                         smoothQualityChange: true,
-                        overrideNative: true,  // force use of videojs-contrib-hls for better compatibility
+                        overrideNative: true,
                         debug: false
                     }
                 },
@@ -213,121 +279,88 @@
                         'durationDisplay',
                         'progressControl',
                         'liveDisplay',
-                        'qualitySelector',   // if available, but we handle quality info manually
                         'playbackRateMenuButton',
                         'fullscreenToggle'
                     ]
                 }
             });
-
-            // When player is ready, set source
+            
             player.ready(() => {
                 console.log('✅ Video.js player ready');
                 loadStream();
             });
-
-            // Event listeners for status
+            
+            // Event listeners
             player.on('playing', () => {
                 updateStatus(true);
-                retryAttempt = 0; // reset retry counter on successful play
-                document.getElementById('qualityInfo').innerHTML = '🎬 HLS • Adaptive';
+                retryAttempt = 0;
+                document.getElementById('qualityInfo').innerHTML = '🎬 HLS • Streaming via proxy';
+                document.getElementById('proxyNote').style.background = 'rgba(46, 204, 113, 0.2)';
+                document.getElementById('proxyNote').style.borderLeftColor = '#2ecc71';
             });
+            
             player.on('pause', () => updateStatus(false));
             player.on('waiting', () => updateStatus(false, 'Buffering...'));
+            
             player.on('error', (event) => {
                 console.error('Player error:', event);
-                let errorMsg = 'Stream error. Maaaring expired ang token o server issue.';
+                let errorMsg = 'Stream error.';
                 const mediaError = player.error();
                 if (mediaError) {
-                    errorMsg = `HLS Error: ${mediaError.code} - ${mediaError.message || 'Network/Stream problem'}`;
+                    errorMsg = `Error: ${mediaError.code}`;
+                    console.log('Media error details:', mediaError);
                 }
                 updateStatus(false, errorMsg);
-                document.getElementById('qualityInfo').innerHTML = '⚠️ Nagkaroon ng error';
                 
-                // Auto retry logic up to MAX_RETRIES
+                // Try next proxy if current failed
                 if (retryAttempt < MAX_RETRIES) {
                     retryAttempt++;
-                    console.log(`Retrying... attempt ${retryAttempt}`);
+                    console.log(`Retrying with next proxy... attempt ${retryAttempt}`);
                     setTimeout(() => {
-                        loadStream();
-                    }, 3000);
+                        tryNextProxy();
+                    }, 2000);
                 } else {
-                    updateStatus(false, 'Hindi makakonekta. Pindutin ang reload.');
+                    updateStatus(false, 'Hindi makakonekta. Subukan ang manual reload.');
                 }
             });
+            
             player.on('loadedmetadata', () => {
-                // Check for live streams or qualities
+                updateStatus(true);
                 try {
                     if (player.hls && player.hls.levels && player.hls.levels.length) {
-                        currentQualityLevels = player.hls.levels;
-                        const qualityCount = currentQualityLevels.length;
-                        document.getElementById('qualityInfo').innerHTML = `🎛️ HLS • ${qualityCount} quality variants`;
-                    } else {
-                        document.getElementById('qualityInfo').innerHTML = '📡 Live Adaptive Stream';
+                        document.getElementById('qualityInfo').innerHTML = `🎛️ HLS • ${player.hls.levels.length} variants`;
                     }
                 } catch(e) { console.warn(e); }
-                updateStatus(true);
             });
         } else {
-            // If player exists, just change source
             loadStream();
         }
     }
-
-    function loadStream() {
-        if (!player) return;
-        updateStatus(false, 'Kumokonekta sa stream...');
-        document.getElementById('qualityInfo').innerHTML = '⏳ Naglo-load ng manifest...';
-        
-        // Remove any existing source and set new one
-        player.src({ type: 'application/x-mpegURL', src: M3U8_URL });
-        player.load();
-        // Autoplay attempt
-        player.play().catch(e => {
-            console.warn('Autoplay prevented:', e);
-            updateStatus(false, 'I-tap ang play para magsimula');
-        });
-    }
-
-    // Reload function (manual)
+    
+    // Manual reload function
     function reloadStream() {
         retryAttempt = 0;
+        currentProxyIndex = 0;
         if (player) {
             loadStream();
         } else {
             initHLSPlayer();
         }
     }
-
-    // Detect if token is expired? Not directly, but show helpful note.
-    function checkTokenExpiryWarn() {
-        // The token in URL has exp claim (we can decode to show warning, but just a friendly UX)
-        try {
-            const urlParams = new URLSearchParams(window.location.search);
-            // just optional: display a note but not required.
-            console.log("Stream URL uses token authentication. If stream fails, token may have expired.");
-        } catch(e) {}
-        const footerNote = document.querySelector('.footer-note');
-        if (footerNote) {
-            footerNote.innerHTML += ` • 🔑 Token-based access | Nagre-renew? I-reload kung kinakailangan.`;
-        }
+    
+    // Alternative: Direct iframe method for testing (if CORS is too strict)
+    function showAlternativeMethod() {
+        console.log("If proxy fails, try opening the M3U8 in VLC or using a browser extension to disable CORS");
     }
-
+    
     // Add button listener
     document.getElementById('reloadBtn').addEventListener('click', () => {
         reloadStream();
     });
-
-    // Start everything when DOM is ready
+    
+    // Start everything
     document.addEventListener('DOMContentLoaded', () => {
         initHLSPlayer();
-        checkTokenExpiryWarn();
-        
-        // Optional: Network detection indicator
-        window.addEventListener('online', () => {
-            console.log('Back online, attempting to refresh stream');
-            reloadStream();
-        });
     });
 </script>
 </body>
