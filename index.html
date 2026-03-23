@@ -5,21 +5,11 @@
     <title>Shaka Player - MPD Stream</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.3.0/shaka-player.compiled.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        video {
-            width: 100%;
-            max-width: 800px;
-            height: auto;
-            border: 1px solid #ccc;
-        }
-        #status {
-            margin-top: 10px;
-            padding: 10px;
-            background: #f0f0f0;
-        }
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        video { width: 100%; max-width: 800px; height: auto; border: 1px solid #ccc; }
+        #status { margin-top: 10px; padding: 10px; background: #f0f0f0; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e9; color: #2e7d32; }
     </style>
 </head>
 <body>
@@ -31,26 +21,56 @@
         const video = document.getElementById('video');
         const statusDiv = document.getElementById('status');
         
+        // Original HTTP MPD URL
+        const httpManifestUri = 'http://136.158.97.2:6610/001/2/ch00000090990000001093/manifest.mpd?AuthInfo=v87HD9rEhwHiAdYyrP20TsXah2%2FZLFNNIdWrVrXDMAoLvT86fM74ocVChyFS93HUsyK4TH4mOENKJ45mwOyS0g%3D%3D&version=v1.0&BreakPoint=0&virtualDomain=001.live_hls.zte.com&programid=ch00000000000000001214&contentid=ch00000000000000001214&videoid=ch00000090990000001093&recommendtype=0&userid=1438418816418&boid=001&stbid=02%3A00%3A00%3A00%3A00%3A00&terminalflag=1&profilecode=&usersessionid=BLJMICF8T5XXXX&NeedJITP=1&JITPMediaType=DASH&JITPDRMType=NO';
+        
+        // Use HTTPS proxy to bypass mixed content
+        const proxyUrl = 'https://corsproxy.io/?';
+        const manifestUri = proxyUrl + encodeURIComponent(httpManifestUri);
+        
+        // Alternative proxies (kung ayaw gumana ng una):
+        // const proxyUrl = 'https://api.allorigins.win/raw?url=';
+        // const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+        
         // Initialize Shaka Player
         const player = new shaka.Player(video);
         
-        // MPD URL
-        const manifestUri = 'http://136.158.97.2:6610/001/2/ch00000090990000001093/manifest.mpd?AuthInfo=v87HD9rEhwHiAdYyrP20TsXah2%2FZLFNNIdWrVrXDMAoLvT86fM74ocVChyFS93HUsyK4TH4mOENKJ45mwOyS0g%3D%3D&version=v1.0&BreakPoint=0&virtualDomain=001.live_hls.zte.com&programid=ch00000000000000001214&contentid=ch00000000000000001214&videoid=ch00000090990000001093&recommendtype=0&userid=1438418816418&boid=001&stbid=02%3A00%3A00%3A00%3A00%3A00&terminalflag=1&profilecode=&usersessionid=BLJMICF8T5XXXX&NeedJITP=1&JITPMediaType=DASH&JITPDRMType=NO';
+        // Configure player for better compatibility
+        player.configure({
+            manifest: {
+                dash: {
+                    ignoreMinBufferTime: true,
+                    defaultLanguage: 'en'
+                }
+            },
+            streaming: {
+                bufferingGoal: 10,
+                rebufferingGoal: 2,
+                retryParameters: {
+                    maxAttempts: 5,
+                    baseDelay: 1000,
+                    backoffFactor: 2
+                }
+            }
+        });
         
         // Error handling
         player.addEventListener('error', (event) => {
             console.error('Player error:', event.detail);
             statusDiv.innerHTML = `Error: ${event.detail.message}`;
+            statusDiv.className = 'error';
         });
         
-        // Load manifest
+        // Load manifest with proxy
         player.load(manifestUri).then(() => {
             console.log('MPD loaded successfully!');
             statusDiv.innerHTML = 'Stream loaded successfully! Playing...';
-            video.play();
+            statusDiv.className = 'success';
+            video.play().catch(e => console.log('Auto-play blocked:', e));
         }).catch((error) => {
             console.error('Failed to load MPD:', error);
-            statusDiv.innerHTML = `Failed to load stream: ${error.message}`;
+            statusDiv.innerHTML = `Failed to load stream: ${error.message}<br>Try using a different proxy or check if the stream is still valid.`;
+            statusDiv.className = 'error';
         });
     </script>
 </body>
