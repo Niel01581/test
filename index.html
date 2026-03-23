@@ -4,27 +4,197 @@
     <meta charset="UTF-8">
     <title>Shaka Player - MPD Stream</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.3.0/shaka-player.compiled.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: white; }
+        video { width: 100%; max-width: 800px; height: auto; border: 1px solid #333; border-radius: 8px; }
+        #status { margin-top: 15px; padding: 12px; border-radius: 5px; font-family: monospace; }
+        .info { background: #2196f3; color: white; }
+        .error { background: #f44336; color: white; }
+        .success { background: #4caf50; color: white; }
+        button { margin-top: 10px; padding: 10px 20px; background: #2196f3; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0b7dda; }
+        input { width: 100%; padding: 8px; margin: 10px 0; background: #333; color: white; border: 1px solid #555; border-radius: 4px; }
+    </style>
 </head>
 <body>
-    <video id="video" width="800" controls></video>
-    <div id="status"></div>
+    <h1>Shaka Player - MPD Stream</h1>
+    <video id="video" controls></video>
+    <div id="status" class="info">Initializing player...</div>
+    <button onclick="loadStream()">Load Stream</button>
+    <br>
+    <small>Alternative proxy URL (optional):</small>
+    <input type="text" id="proxyInput" placeholder="https://your-proxy.com/?url=" value="https://api.allorigins.win/raw?url=">
 
     <script>
         const video = document.getElementById('video');
-        const player = new shaka.Player(video);
+        const statusDiv = document.getElementById('status');
         
+        // Original MPD URL
         const originalUrl = 'http://136.158.97.2:6610/001/2/ch00000090990000001093/manifest.mpd?AuthInfo=v87HD9rEhwHiAdYyrP20TsXah2%2FZLFNNIdWrVrXDMAoLvT86fM74ocVChyFS93HUsyK4TH4mOENKJ45mwOyS0g%3D%3D&version=v1.0&BreakPoint=0&virtualDomain=001.live_hls.zte.com&programid=ch00000000000000001214&contentid=ch00000000000000001214&videoid=ch00000090990000001093&recommendtype=0&userid=1438418816418&boid=001&stbid=02%3A00%3A00%3A00%3A00%3A00&terminalflag=1&profilecode=&usersessionid=BLJMICF8T5XXXX&NeedJITP=1&JITPMediaType=DASH&JITPDRMType=NO';
         
-        // Use CORS proxy to fix both mixed content and CORS
-        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(originalUrl);
+        let player;
         
-        player.load(proxyUrl).then(() => {
-            document.getElementById('status').innerHTML = '✓ Playing...';
-            video.play();
-        }).catch(e => {
-            document.getElementById('status').innerHTML = '✗ Error: ' + e.message;
-            console.error(e);
-        });
+        // Initialize Shaka Player (remove invalid config)
+        function initPlayer() {
+            if (player) {
+                player.destroy();
+            }
+            player = new shaka.Player(video);
+            
+            // Correct configuration - remove .manifest.dash.defaultLanguage
+            player.configure({
+                streaming: {
+                    bufferingGoal: 10,
+                    rebufferingGoal: 2,
+                    retryParameters: {
+                        maxAttempts: 3,
+                        baseDelay: 1000,
+                        backoffFactor: 2
+                    }
+                },
+                abr: {
+                    enabled: true,
+                    defaultBandwidthEstimate: 1000000
+                }
+            });
+            
+            // Error handling
+            player.addEventListener('error', onPlayerError);
+            
+            return player;
+        }
+        
+        function onPlayerError(event) {
+            console.error('Player error:', event.detail);
+            let errorMsg = 'Player error: ';
+            if (event.detail && event.detail.message) {
+                errorMsg += event.detail.message;
+            } else if (event.detail && event.detail.code) {
+                errorMsg += `Code ${event.detail.code}: ${event.detail.data?.[0] || 'Unknown error'}`;
+            }
+            statusDiv.innerHTML = `❌ ${errorMsg}`;
+            statusDiv.className = 'error';
+        }
+        
+        // Test if URL is accessible
+        async function testUrl(url) {
+            try {
+                const response = await fetch(url, {
+                    method: 'HEAD',
+                    mode: 'cors',
+                    headers: {
+                        'Origin': window.location.origin
+                    }
+                });
+                return response.ok;
+            } catch (e) {
+                console.log('URL test failed:', e);
+                return false;
+            }
+        }
+        
+        // Different proxy options to try
+        const proxyOptions = [
+            { name: 'AllOrigins', url: 'https://api.allorigins.win/raw?url=' },
+            { name: 'CORS Anywhere (needs demo)', url: 'https://cors-anywhere.herokuapp.com/' },
+            { name: 'CORS Proxy', url: 'https://corsproxy.io/?' },
+            { name: 'CodeSandbox', url: 'https://codesandbox.io/proxy/' },
+            { name: 'Direct (no proxy)', url: '' }
+        ];
+        
+        let currentProxyIndex = 0;
+        
+        async function loadStream() {
+            const customProxy = document.getElementById('proxyInput').value;
+            let manifestUrl = originalUrl;
+            
+            statusDiv.innerHTML = '🔄 Loading stream...';
+            statusDiv.className = 'info';
+            
+            // Try different proxies
+            for (let i = 0; i < proxyOptions.length; i++) {
+                const proxy = proxyOptions[i];
+                let testUrl = proxy.url + encodeURIComponent(originalUrl);
+                
+                if (proxy.url === '') {
+                    testUrl = originalUrl;
+                }
+                
+                console.log(`Trying ${proxy.name}:`, testUrl);
+                statusDiv.innerHTML = `🔄 Trying ${proxy.name}...`;
+                
+                try {
+                    // Initialize fresh player for each attempt
+                    initPlayer();
+                    
+                    // Attempt to load
+                    await player.load(testUrl);
+                    
+                    // If successful
+                    statusDiv.innerHTML = `✅ Stream loaded successfully using ${proxy.name}! Playing...`;
+                    statusDiv.className = 'success';
+                    await video.play().catch(e => console.log('Auto-play blocked:', e));
+                    return; // Exit if successful
+                    
+                } catch (error) {
+                    console.log(`${proxy.name} failed:`, error.message);
+                    
+                    // Check for specific errors
+                    if (error.message && error.message.includes('403')) {
+                        console.log(`${proxy.name} returned 403 Forbidden`);
+                    }
+                    
+                    // Continue to next proxy
+                    if (i === proxyOptions.length - 1) {
+                        statusDiv.innerHTML = `❌ All proxies failed. Last error: ${error.message}<br><br>Possible solutions:<br>1. Stream URL might be expired<br>2. Server requires specific headers<br>3. Try a different proxy in the input box above<br>4. Stream may only work on specific networks`;
+                        statusDiv.className = 'error';
+                    }
+                }
+            }
+        }
+        
+        // Try with custom proxy from input
+        function loadWithCustomProxy() {
+            const customProxy = document.getElementById('proxyInput').value;
+            if (!customProxy) {
+                loadStream();
+                return;
+            }
+            
+            const manifestUrl = customProxy + encodeURIComponent(originalUrl);
+            statusDiv.innerHTML = '🔄 Trying custom proxy...';
+            
+            initPlayer();
+            player.load(manifestUrl).then(() => {
+                statusDiv.innerHTML = '✅ Stream loaded with custom proxy!';
+                statusDiv.className = 'success';
+                video.play();
+            }).catch(error => {
+                statusDiv.innerHTML = `❌ Custom proxy failed: ${error.message}`;
+                statusDiv.className = 'error';
+            });
+        }
+        
+        // Alternative: Try using a CORS proxy that you can deploy yourself
+        // Or use a local server to avoid CORS entirely
+        
+        // Auto-load on page load
+        window.onload = () => {
+            initPlayer();
+            // Don't auto-load, let user click button
+            statusDiv.innerHTML = 'ℹ️ Click "Load Stream" to start playing';
+            statusDiv.className = 'info';
+        };
     </script>
+    
+    <br><br>
+    <h3>📝 Troubleshooting Tips:</h3>
+    <ul>
+        <li>Try using a different proxy URL in the input box above</li>
+        <li>Check if the stream URL is still valid (AuthInfo might expire)</li>
+        <li>Some proxies might have rate limits - wait a few minutes and try again</li>
+        <li>If using Chrome, try disabling "Block insecure content" in site settings</li>
+        <li>Consider running a local server instead of GitHub Pages to avoid mixed content</li>
+    </ul>
 </body>
 </html>
