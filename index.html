@@ -1,200 +1,442 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Shaka Player - MPD Stream</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.3.0/shaka-player.compiled.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>IPTV Player - MPD Stream</title>
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.3.0/dist/shaka-player.compiled.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: white; }
-        video { width: 100%; max-width: 800px; height: auto; border: 1px solid #333; border-radius: 8px; }
-        #status { margin-top: 15px; padding: 12px; border-radius: 5px; font-family: monospace; }
-        .info { background: #2196f3; color: white; }
-        .error { background: #f44336; color: white; }
-        .success { background: #4caf50; color: white; }
-        button { margin-top: 10px; padding: 10px 20px; background: #2196f3; color: white; border: none; border-radius: 5px; cursor: pointer; }
-        button:hover { background: #0b7dda; }
-        input { width: 100%; padding: 8px; margin: 10px 0; background: #333; color: white; border: 1px solid #555; border-radius: 4px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+        
+        .player-wrapper {
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        
+        video {
+            width: 100%;
+            height: auto;
+            background: #000;
+        }
+        
+        .controls-panel {
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            margin-top: 20px;
+            border-radius: 12px;
+        }
+        
+        .url-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .url-input {
+            flex: 1;
+            padding: 12px 16px;
+            background: #2a2a3a;
+            border: 1px solid #3a3a4a;
+            color: white;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: monospace;
+        }
+        
+        .url-input:focus {
+            outline: none;
+            border-color: #00adb5;
+        }
+        
+        button {
+            padding: 12px 24px;
+            background: #00adb5;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        button:hover {
+            background: #00838f;
+            transform: translateY(-1px);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button.danger {
+            background: #dc3545;
+        }
+        
+        button.danger:hover {
+            background: #c82333;
+        }
+        
+        button.success {
+            background: #28a745;
+        }
+        
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status.loading {
+            background: #ffc10720;
+            color: #ffc107;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .status.success {
+            background: #28a74520;
+            color: #28a745;
+            border-left: 4px solid #28a745;
+        }
+        
+        .status.error {
+            background: #dc354520;
+            color: #dc3545;
+            border-left: 4px solid #dc3545;
+        }
+        
+        .channel-list {
+            background: rgba(0,0,0,0.5);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .channel-list h3 {
+            color: white;
+            margin-bottom: 10px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        .channel-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .channel-btn {
+            background: #2a2a3a;
+            padding: 8px 16px;
+            font-size: 12px;
+        }
+        
+        .channel-btn:hover {
+            background: #00adb5;
+        }
+        
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .url-input-group {
+                flex-direction: column;
+            }
+            button {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
-    <h1>Shaka Player - MPD Stream</h1>
-    <video id="video" controls></video>
-    <div id="status" class="info">Initializing player...</div>
-    <button onclick="loadStream()">Load Stream</button>
-    <br>
-    <small>Alternative proxy URL (optional):</small>
-    <input type="text" id="proxyInput" placeholder="https://your-proxy.com/?url=" value="https://api.allorigins.win/raw?url=">
+    <div class="container">
+        <div class="player-wrapper">
+            <video id="video" class="video-js vjs-big-play-centered" controls preload="auto">
+                <p class="vjs-no-js">Please enable JavaScript</p>
+            </video>
+        </div>
+        
+        <div class="controls-panel">
+            <div class="url-input-group">
+                <input type="text" id="mpdUrl" class="url-input" placeholder="Enter MPD / M3U8 URL..." value="http://136.158.97.2:6610/001/2/ch00000090990000001093/manifest.mpd?AuthInfo=v87HD9rEhwHiAdYyrP20TsXah2%2FZLFNNIdWrVrXDMAoLvT86fM74ocVChyFS93HUsyK4TH4mOENKJ45mwOyS0g%3D%3D&version=v1.0&BreakPoint=0&virtualDomain=001.live_hls.zte.com&programid=ch00000000000000001214&contentid=ch00000000000000001214&videoid=ch00000090990000001093&recommendtype=0&userid=1438418816418&boid=001&stbid=02%3A00%3A00%3A00%3A00%3A00&terminalflag=1&profilecode=&usersessionid=BLJMICF8T5XXXX&NeedJITP=1&JITPMediaType=DASH&JITPDRMType=NO">
+                <button onclick="loadStream()" id="playBtn">▶ PLAY</button>
+                <button onclick="stopStream()" class="danger">⏹ STOP</button>
+            </div>
+            
+            <div id="status" class="status loading">
+                <div class="spinner"></div>
+                <span>Ready to play. Click PLAY to start...</span>
+            </div>
+        </div>
+        
+        <div class="channel-list">
+            <h3>📺 SAVED CHANNELS (Click to load)</h3>
+            <div class="channel-buttons">
+                <button class="channel-btn" onclick="loadSavedChannel(0)">Channel 1 (MPD)</button>
+            </div>
+        </div>
+    </div>
 
     <script>
-        const video = document.getElementById('video');
-        const statusDiv = document.getElementById('status');
+        let player = null;
+        let currentPlayerType = null;
         
-        // Original MPD URL
-        const originalUrl = 'http://136.158.97.2:6610/001/2/ch00000090990000001093/manifest.mpd?AuthInfo=v87HD9rEhwHiAdYyrP20TsXah2%2FZLFNNIdWrVrXDMAoLvT86fM74ocVChyFS93HUsyK4TH4mOENKJ45mwOyS0g%3D%3D&version=v1.0&BreakPoint=0&virtualDomain=001.live_hls.zte.com&programid=ch00000000000000001214&contentid=ch00000000000000001214&videoid=ch00000090990000001093&recommendtype=0&userid=1438418816418&boid=001&stbid=02%3A00%3A00%3A00%3A00%3A00&terminalflag=1&profilecode=&usersessionid=BLJMICF8T5XXXX&NeedJITP=1&JITPMediaType=DASH&JITPDRMType=NO';
+        // Your MPD URL
+        const DEFAULT_MPD = document.getElementById('mpdUrl').value;
         
-        let player;
-        
-        // Initialize Shaka Player (remove invalid config)
-        function initPlayer() {
+        // Initialize video.js player as fallback
+        function initVideoJS() {
             if (player) {
-                player.destroy();
+                player.dispose();
             }
-            player = new shaka.Player(video);
-            
-            // Correct configuration - remove .manifest.dash.defaultLanguage
-            player.configure({
-                streaming: {
-                    bufferingGoal: 10,
-                    rebufferingGoal: 2,
-                    retryParameters: {
-                        maxAttempts: 3,
-                        baseDelay: 1000,
-                        backoffFactor: 2
+            player = videojs('video', {
+                controls: true,
+                autoplay: true,
+                preload: 'auto',
+                techOrder: ['html5'],
+                html5: {
+                    nativeControlsForTouch: true,
+                    nativeAudioTracks: false,
+                    nativeVideoTracks: false,
+                    hls: {
+                        overrideNative: true
                     }
-                },
-                abr: {
-                    enabled: true,
-                    defaultBandwidthEstimate: 1000000
                 }
             });
-            
-            // Error handling
-            player.addEventListener('error', onPlayerError);
-            
+            currentPlayerType = 'videojs';
             return player;
         }
         
-        function onPlayerError(event) {
-            console.error('Player error:', event.detail);
-            let errorMsg = 'Player error: ';
-            if (event.detail && event.detail.message) {
-                errorMsg += event.detail.message;
-            } else if (event.detail && event.detail.code) {
-                errorMsg += `Code ${event.detail.code}: ${event.detail.data?.[0] || 'Unknown error'}`;
+        // Initialize Shaka Player for MPD/DASH
+        function initShakaPlayer() {
+            if (player && currentPlayerType === 'videojs') {
+                player.dispose();
             }
-            statusDiv.innerHTML = `❌ ${errorMsg}`;
-            statusDiv.className = 'error';
+            
+            const videoElement = document.getElementById('video');
+            // Remove videojs wrapper if exists
+            if (videoElement.hasAttribute('data-vjs-player')) {
+                videoElement.removeAttribute('data-vjs-player');
+            }
+            
+            // Reset video element
+            videoElement.pause();
+            videoElement.src = '';
+            videoElement.load();
+            
+            player = new shaka.Player(videoElement);
+            currentPlayerType = 'shaka';
+            return player;
         }
         
-        // Test if URL is accessible
-        async function testUrl(url) {
-            try {
-                const response = await fetch(url, {
-                    method: 'HEAD',
-                    mode: 'cors',
-                    headers: {
-                        'Origin': window.location.origin
-                    }
-                });
-                return response.ok;
-            } catch (e) {
-                console.log('URL test failed:', e);
-                return false;
+        // Update status display
+        function updateStatus(type, message) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            
+            if (type === 'loading') {
+                statusDiv.innerHTML = `<div class="spinner"></div><span>${message}</span>`;
+            } else if (type === 'success') {
+                statusDiv.innerHTML = `<span>✅ ${message}</span>`;
+            } else if (type === 'error') {
+                statusDiv.innerHTML = `<span>❌ ${message}</span>`;
             }
         }
         
-        // Different proxy options to try
-        const proxyOptions = [
-            { name: 'AllOrigins', url: 'https://api.allorigins.win/raw?url=' },
-            { name: 'CORS Anywhere (needs demo)', url: 'https://cors-anywhere.herokuapp.com/' },
-            { name: 'CORS Proxy', url: 'https://corsproxy.io/?' },
-            { name: 'CodeSandbox', url: 'https://codesandbox.io/proxy/' },
-            { name: 'Direct (no proxy)', url: '' }
-        ];
+        // Check if URL is MPD or HLS
+        function getStreamType(url) {
+            if (url.includes('.mpd') || url.includes('manifest.mpd') || url.includes('DASH')) {
+                return 'dash';
+            }
+            if (url.includes('.m3u8') || url.includes('hls')) {
+                return 'hls';
+            }
+            return 'auto';
+        }
         
-        let currentProxyIndex = 0;
+        // Load stream with CORS proxy (para iwas mixed content)
+        function getProxiedUrl(originalUrl) {
+            // Kung HTTPS na yung site mo, kailangan ng proxy para sa HTTP na stream
+            if (window.location.protocol === 'https:' && originalUrl.startsWith('http://')) {
+                // Gumamit ng public CORS proxy
+                const proxy = 'https://corsproxy.io/?' + encodeURIComponent(originalUrl);
+                console.log('Using proxy:', proxy);
+                return proxy;
+            }
+            return originalUrl;
+        }
         
+        // Main load function
         async function loadStream() {
-            const customProxy = document.getElementById('proxyInput').value;
-            let manifestUrl = originalUrl;
+            let url = document.getElementById('mpdUrl').value.trim();
             
-            statusDiv.innerHTML = '🔄 Loading stream...';
-            statusDiv.className = 'info';
-            
-            // Try different proxies
-            for (let i = 0; i < proxyOptions.length; i++) {
-                const proxy = proxyOptions[i];
-                let testUrl = proxy.url + encodeURIComponent(originalUrl);
-                
-                if (proxy.url === '') {
-                    testUrl = originalUrl;
-                }
-                
-                console.log(`Trying ${proxy.name}:`, testUrl);
-                statusDiv.innerHTML = `🔄 Trying ${proxy.name}...`;
-                
-                try {
-                    // Initialize fresh player for each attempt
-                    initPlayer();
-                    
-                    // Attempt to load
-                    await player.load(testUrl);
-                    
-                    // If successful
-                    statusDiv.innerHTML = `✅ Stream loaded successfully using ${proxy.name}! Playing...`;
-                    statusDiv.className = 'success';
-                    await video.play().catch(e => console.log('Auto-play blocked:', e));
-                    return; // Exit if successful
-                    
-                } catch (error) {
-                    console.log(`${proxy.name} failed:`, error.message);
-                    
-                    // Check for specific errors
-                    if (error.message && error.message.includes('403')) {
-                        console.log(`${proxy.name} returned 403 Forbidden`);
-                    }
-                    
-                    // Continue to next proxy
-                    if (i === proxyOptions.length - 1) {
-                        statusDiv.innerHTML = `❌ All proxies failed. Last error: ${error.message}<br><br>Possible solutions:<br>1. Stream URL might be expired<br>2. Server requires specific headers<br>3. Try a different proxy in the input box above<br>4. Stream may only work on specific networks`;
-                        statusDiv.className = 'error';
-                    }
-                }
-            }
-        }
-        
-        // Try with custom proxy from input
-        function loadWithCustomProxy() {
-            const customProxy = document.getElementById('proxyInput').value;
-            if (!customProxy) {
-                loadStream();
+            if (!url) {
+                updateStatus('error', 'Please enter a stream URL');
                 return;
             }
             
-            const manifestUrl = customProxy + encodeURIComponent(originalUrl);
-            statusDiv.innerHTML = '🔄 Trying custom proxy...';
+            const streamType = getStreamType(url);
+            updateStatus('loading', `Loading stream... (${streamType.toUpperCase()})`);
             
-            initPlayer();
-            player.load(manifestUrl).then(() => {
-                statusDiv.innerHTML = '✅ Stream loaded with custom proxy!';
-                statusDiv.className = 'success';
-                video.play();
-            }).catch(error => {
-                statusDiv.innerHTML = `❌ Custom proxy failed: ${error.message}`;
-                statusDiv.className = 'error';
-            });
+            try {
+                if (streamType === 'dash' || (streamType === 'auto' && url.includes('.mpd'))) {
+                    // Use Shaka Player for DASH/MPD
+                    const shakaPlayer = initShakaPlayer();
+                    
+                    // Configure Shaka
+                    shakaPlayer.configure({
+                        abr: { enabled: true },
+                        streaming: {
+                            bufferingGoal: 10,
+                            rebufferingGoal: 2,
+                            retryParameters: {
+                                maxAttempts: 5,
+                                baseDelay: 1000,
+                                backoffFactor: 2
+                            }
+                        }
+                    });
+                    
+                    // Add error handling
+                    shakaPlayer.addEventListener('error', (event) => {
+                        console.error('Shaka error:', event.detail);
+                        updateStatus('error', `Playback error: ${event.detail.message || 'Unknown error'}`);
+                    });
+                    
+                    // Load the manifest
+                    const proxiedUrl = getProxiedUrl(url);
+                    await shakaPlayer.load(proxiedUrl);
+                    
+                    updateStatus('success', 'Stream loaded successfully! Playing...');
+                    
+                    // Auto play
+                    const videoElement = document.getElementById('video');
+                    videoElement.play().catch(e => {
+                        console.log('Auto-play blocked:', e);
+                        updateStatus('success', 'Stream ready. Click play to start.');
+                    });
+                    
+                } else if (streamType === 'hls') {
+                    // Use Video.js for HLS
+                    const videojsPlayer = initVideoJS();
+                    
+                    videojsPlayer.src({
+                        src: getProxiedUrl(url),
+                        type: 'application/x-mpegURL'
+                    });
+                    
+                    videojsPlayer.ready(() => {
+                        videojsPlayer.play();
+                        updateStatus('success', 'HLS Stream loaded successfully!');
+                    });
+                    
+                    videojsPlayer.on('error', () => {
+                        updateStatus('error', 'Failed to load HLS stream');
+                    });
+                    
+                } else {
+                    // Try Video.js for other formats
+                    const videojsPlayer = initVideoJS();
+                    videojsPlayer.src(url);
+                    videojsPlayer.ready(() => {
+                        videojsPlayer.play();
+                        updateStatus('success', 'Stream loaded!');
+                    });
+                }
+                
+            } catch (error) {
+                console.error('Load error:', error);
+                updateStatus('error', `Failed to load: ${error.message || 'Unknown error'}`);
+                
+                // Fallback: try using native video element
+                try {
+                    updateStatus('loading', 'Trying fallback method...');
+                    const videoElement = document.getElementById('video');
+                    videoElement.src = getProxiedUrl(url);
+                    videoElement.load();
+                    videoElement.play();
+                    updateStatus('success', 'Playing with fallback player');
+                } catch (fallbackError) {
+                    updateStatus('error', 'All playback methods failed. Check URL or network.');
+                }
+            }
         }
         
-        // Alternative: Try using a CORS proxy that you can deploy yourself
-        // Or use a local server to avoid CORS entirely
+        // Stop stream
+        function stopStream() {
+            if (player) {
+                if (currentPlayerType === 'shaka') {
+                    player.destroy();
+                } else if (currentPlayerType === 'videojs') {
+                    player.pause();
+                    player.src({ type: 'video/mp4', src: '' });
+                }
+            }
+            
+            const videoElement = document.getElementById('video');
+            videoElement.pause();
+            videoElement.src = '';
+            videoElement.load();
+            
+            updateStatus('loading', 'Stopped. Ready to play.');
+        }
         
-        // Auto-load on page load
-        window.onload = () => {
-            initPlayer();
-            // Don't auto-load, let user click button
-            statusDiv.innerHTML = 'ℹ️ Click "Load Stream" to start playing';
-            statusDiv.className = 'info';
-        };
+        // Load saved channel
+        function loadSavedChannel(index) {
+            const channels = [DEFAULT_MPD];
+            if (channels[index]) {
+                document.getElementById('mpdUrl').value = channels[index];
+                loadStream();
+            }
+        }
+        
+        // Handle enter key
+        document.getElementById('mpdUrl').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                loadStream();
+            }
+        });
+        
+        // Auto-load on page load (optional - comment out if ayaw)
+        // setTimeout(() => loadStream(), 1000);
     </script>
-    
-    <br><br>
-    <h3>📝 Troubleshooting Tips:</h3>
-    <ul>
-        <li>Try using a different proxy URL in the input box above</li>
-        <li>Check if the stream URL is still valid (AuthInfo might expire)</li>
-        <li>Some proxies might have rate limits - wait a few minutes and try again</li>
-        <li>If using Chrome, try disabling "Block insecure content" in site settings</li>
-        <li>Consider running a local server instead of GitHub Pages to avoid mixed content</li>
-    </ul>
 </body>
 </html>
